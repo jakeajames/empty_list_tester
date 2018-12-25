@@ -13,15 +13,13 @@
 int tries, success;
 
 void addOneTry() {
-    tries++;
     NSString *file = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/tries.txt"];
-    [[NSString stringWithFormat:@"%d", tries] writeToFile:file atomically:YES encoding:NSASCIIStringEncoding error:nil];
+    [[NSString stringWithFormat:@"%d", tries+1] writeToFile:file atomically:YES encoding:NSASCIIStringEncoding error:nil];
 }
 
 void addOneSuccess() {
-    success++;
     NSString *file = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/success.txt"];
-    [[NSString stringWithFormat:@"%d", success] writeToFile:file atomically:YES encoding:NSASCIIStringEncoding error:nil];
+    [[NSString stringWithFormat:@"%d", success+1] writeToFile:file atomically:YES encoding:NSASCIIStringEncoding error:nil];
 }
 
 int getTries() {
@@ -150,7 +148,7 @@ int getSuccess() {
     offsets_init();
     
     while (done == false) sleep(1);
-    while (getTries() != tries) sleep(1);
+    while (getTries() != (tries + 1)) sleep(1);
     
     rv = exploit();
     
