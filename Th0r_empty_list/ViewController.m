@@ -12,16 +12,6 @@
 
 int tries, success;
 
-void addOneTry() {
-    NSString *file = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/tries.txt"];
-    [[NSString stringWithFormat:@"%d", tries+1] writeToFile:file atomically:YES encoding:NSASCIIStringEncoding error:nil];
-}
-
-void addOneSuccess() {
-    NSString *file = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/success.txt"];
-    [[NSString stringWithFormat:@"%d", success+1] writeToFile:file atomically:YES encoding:NSASCIIStringEncoding error:nil];
-}
-
 int getTries() {
     NSString *file = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/tries.txt"];
     NSString *str = [NSString stringWithContentsOfFile:file encoding:NSASCIIStringEncoding error:nil];
@@ -60,8 +50,7 @@ int getSuccess() {
 - (IBAction)go:(id)sender {
     char *th0r = strdup([[[[NSBundle mainBundle] bundlePath] stringByAppendingPathComponent:@"el.dylib"] UTF8String]);
     
-    __block int rv = initWithMacho(th0r);
-    __block bool done = false;
+    int rv = initWithMacho(th0r);
     if (rv) {
         [sender setTitle:@"Failed to open binary" forState:UIControlStateNormal];
         return;
@@ -76,18 +65,6 @@ int getSuccess() {
     
     printf("Loaded binary: %p\n", handle);
 
-    // sometimes device panics before we write to file so make sure we wrote before triggering exploit
-    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
-    dispatch_group_t group = dispatch_group_create();
-    
-    dispatch_group_async(group, queue, ^{
-        addOneTry();
-    });
-    
-    dispatch_group_notify(group, queue, ^{
-        done = true;
-    });
-    
     //------ ASLR ------//
     uint64_t header = find_symbol("__mh_execute_header", false);
     uint64_t slid_header = (uint64_t)dlsym(handle, "_mh_execute_header");
@@ -147,8 +124,21 @@ int getSuccess() {
     //----- START ------//
     offsets_init();
     
-    while (done == false) sleep(1);
-    while (getTries() != (tries + 1)) sleep(1);
+    // sometimes device panics before we write to file so make sure we wrote before triggering exploit
+    dispatch_queue_t queue = dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_HIGH, 0);
+    dispatch_group_t group = dispatch_group_create();
+    dispatch_semaphore_t sm = dispatch_semaphore_create(0);
+    
+    dispatch_group_async(group, queue, ^{
+        [[NSString stringWithFormat:@"%d", tries + 1] writeToFile:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/tries.txt"] atomically:YES encoding:NSASCIIStringEncoding error:nil];
+        
+        while (getTries() != (tries + 1));
+        sleep(5); // unfortunately i gotta do this.
+        
+        dispatch_semaphore_signal(sm);
+    });
+    
+    dispatch_semaphore_wait(sm, DISPATCH_TIME_FOREVER);
     
     rv = exploit();
     
@@ -157,7 +147,7 @@ int getSuccess() {
     }
     else {
         [sender setTitle:[NSString stringWithFormat:@"tfp0: 0x%x", *tfp0_ptr] forState:UIControlStateNormal];
-        addOneSuccess();
+        [[NSString stringWithFormat:@"%d", success+1] writeToFile:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/success.txt"] atomically:YES encoding:NSASCIIStringEncoding error:nil];
     }
 }
 
